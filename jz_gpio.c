@@ -26,9 +26,6 @@
 #include <sys/mman.h>
 #include <ctype.h>
 
-#define PxDRVL_OFFSET 0x130
-#define PxDRVH_OFFSET 0x140
-
 static void show_help() {
 	puts(
 		"Usage: jz_gpio <show|[GPIO_DEF [COMMAND VALUE]]>\n"
@@ -59,6 +56,9 @@ static void show_help() {
 
 #define GPIO_BASE		0x10010000
 #define GPIO_PORT_WIDTH		0x1000
+
+#define PxDRVL_OFFSET 0x130
+#define PxDRVH_OFFSET 0x140
 
 #define BIT_GET(x, n)		(((x) >> (n)) & 1)
 #define BIT_SET(x, n)		((x) |= (1 << (n)))
@@ -96,61 +96,54 @@ typedef struct {
 
 static void *phys_mem = NULL;
 
+static uint8_t get_drive_strength(volatile XHAL_GPIO_HandleTypeDef *port, uint8_t offset);
+static uint8_t drive_strength_to_ma(uint8_t strength);
+
 static void show_gpios() {
-	for (int i=0; i<3; i++) {
+	for (int i = 0; i < 3; i++) {
 		volatile XHAL_GPIO_HandleTypeDef *port = phys_mem + i * GPIO_PORT_WIDTH;
 
 		printf("Port %c\n", 'A' + i);
 		printf("================\n");
 
-		for (int j=0; j<32; j++) {
+		for (int j = 0; j < 32; j++) {
 			printf("P%c%02u: ", 'A' + i, j);
+			uint8_t drive_strength = get_drive_strength(port, j);
 
 			bool b_int = BIT_GET(port->INT, j);
 			bool b_msk = BIT_GET(port->MSK, j);
 			bool b_pat1 = BIT_GET(port->PAT1, j);
 			bool b_pat0 = BIT_GET(port->PAT0, j);
+			bool b_inl = BIT_GET(port->INL, j); // Get the input level
 
 			if (b_int) {
-				printf("INTERRUPT ");
-
 				if (b_pat1) {
 					if (b_pat0) {
-						printf("RISING");
+						printf("INTERRUPT RISING_EDGE ");
 					} else {
-						printf("FALLING");
+						printf("INTERRUPT FALLING_EDGE ");
 					}
-					printf("_EDGE ");
 				} else {
 					if (b_pat0) {
-						printf("HIGH");
+						printf("INTERRUPT HIGH_LEVEL ");
 					} else {
-						printf("LOW");
+						printf("INTERRUPT LOW_LEVEL ");
 					}
-					printf("_LEVEL ");
 				}
 
 				if (b_msk) {
-					printf("DISABLED\n");
+					printf("DISABLED ");
 				} else {
-					printf("ENABLED\n");
+					printf("ENABLED ");
 				}
 			} else {
 				if (b_msk) {
-					printf("GPIO ");
-
-					if (b_pat1) {
-						bool b_inl = BIT_GET(port->INL, j);
-						printf("INPUT %u\n", b_inl);
-
-					} else {
-						printf("OUTPUT %u\n", b_pat0);
-					}
-
+					printf(b_pat1 ? "GPIO INPUT %u " : "GPIO OUTPUT %u ", b_pat0 ? b_inl : b_pat0);
 				} else {
-					printf("FUNCTION %d\n", b_pat1 << 1 | b_pat0);
+					printf("FUNCTION %d ", b_pat1 << 1 | b_pat0);
 				}
 			}
+			printf("%dma\n", drive_strength_to_ma(drive_strength));
 		}
 
 		printf("\n");
@@ -191,6 +184,34 @@ static long check_val(const char *val) {
 	}
 
 	return strtol(val, NULL, 10);
+}
+
+static uint8_t drive_strength_to_ma(uint8_t strength) {
+    switch (strength) {
+        case 0: return 2;
+        case 1: return 4;
+        case 2: return 8;
+        case 3: return 12;
+        default: return 0; // Invalid strength
+    }
+}
+
+static uint8_t get_drive_strength(volatile XHAL_GPIO_HandleTypeDef *port, uint8_t offset) {
+    uint32_t *drive_reg;
+    uint32_t mask = 3 << (offset * 2); // Each pin has 2 bits for drive strength
+    uint8_t strength;
+
+    if (offset < 16) {
+        // For lower pins (0-15)
+        drive_reg = (uint32_t *)((uint8_t *)port + PxDRVL_OFFSET);
+    } else {
+        // For higher pins (16 and above)
+        drive_reg = (uint32_t *)((uint8_t *)port + PxDRVH_OFFSET);
+        offset -= 16; // Adjust offset for high pins
+    }
+
+    strength = (*drive_reg & mask) >> (offset * 2);
+    return strength;
 }
 
 static void set_drive_strength(volatile XHAL_GPIO_HandleTypeDef *port, uint8_t offset, uint8_t strength) {
