@@ -29,7 +29,7 @@
 static void show_help() {
 	puts(
 		"Usage: jz_gpio <show|[GPIO_DEF [COMMAND VALUE]]>\n"
-		"GPIO diagnostic tool for Ingenic SoCs.\n"
+		"GPIO diagnostic tool for Ingenic Tomahawk Series SoCs.\n"
 		"\n"
 		"Commands:\n"
 		"  inl                        Read input level\n"
@@ -55,7 +55,8 @@ static void show_help() {
 }
 
 #define GPIO_BASE		0x10010000
-#define GPIO_PORT_WIDTH		0x1000
+#define CONTROL_REG     0x1300002C // Control register address
+#define PAGE_SIZE 4096  // Define a constant for the page size
 
 #define PxDRVL_OFFSET 0x130
 #define PxDRVH_OFFSET 0x140
@@ -98,6 +99,7 @@ static void *phys_mem = NULL;
 
 static uint8_t get_drive_strength(volatile XHAL_GPIO_HandleTypeDef *port, uint8_t offset);
 static uint8_t drive_strength_to_ma(uint8_t strength);
+uint32_t GPIO_PORT_WIDTH = 0x100; // Default value
 
 static void show_gpios() {
 	for (int i = 0; i < 3; i++) {
@@ -186,6 +188,57 @@ static long check_val(const char *val) {
 	return strtol(val, NULL, 10);
 }
 
+uint32_t read_soc_id() {
+    int fd = open("/dev/mem", O_RDONLY);
+    if (fd < 0) {
+        perror("Error opening /dev/mem");
+        return 0;
+    }
+
+    void *map_base = mmap(NULL, PAGE_SIZE, PROT_READ, MAP_SHARED, fd, CONTROL_REG & ~(PAGE_SIZE - 1));
+    if (map_base == MAP_FAILED) {
+        close(fd);
+        perror("Error mapping memory");
+        return 0;
+    }
+
+    volatile uint32_t *reg = (volatile uint32_t *)(map_base + (CONTROL_REG & (PAGE_SIZE - 1)));
+    uint32_t value = *reg;
+
+    munmap(map_base, PAGE_SIZE);
+    close(fd);
+    return value;
+}
+
+void set_port_width() {
+    uint32_t soc_id = read_soc_id();
+    uint32_t soc_type = (soc_id >> 12) & 0xFF; // Extract relevant bits for SOC type
+
+    switch (soc_type) {
+        case 0x10:
+            GPIO_PORT_WIDTH = 0x100;
+            break;
+		case 0x15:
+            GPIO_PORT_WIDTH = 0x100;
+            break;
+        case 0x20:
+            GPIO_PORT_WIDTH = 0x100;
+            break;
+		case 0x21:
+            GPIO_PORT_WIDTH = 0x1000;
+            break;
+		 case 0x30:
+            GPIO_PORT_WIDTH = 0x1000;
+            break;
+		 case 0x31:
+            GPIO_PORT_WIDTH = 0x1000;
+            break;
+        default:
+            printf("Unknown SOC\n");
+            break;
+    }
+}
+
 static uint8_t drive_strength_to_ma(uint8_t strength) {
     switch (strength) {
         case 0: return 2;
@@ -237,6 +290,8 @@ static void set_drive_strength(volatile XHAL_GPIO_HandleTypeDef *port, uint8_t o
 }
 
 int main(int argc, char **argv) {
+	set_port_width();
+
 	if (argc < 2) {
 		show_help();
 		return 1;
