@@ -26,6 +26,8 @@
 #include <sys/mman.h>
 #include <ctype.h>
 
+uint32_t read_soc_id(); // Function prototype for read_soc_id
+
 static void show_help() {
 	puts(
 		"Usage: jz_gpio <show|[GPIO_DEF [COMMAND VALUE]]>\n"
@@ -52,6 +54,7 @@ static void show_help() {
 		"  jz_gpio pa00 write 1\n"
 		"  jz_gpio pb27 func 0  # Set PB27 as 24MHz clock output on X1000\n"
 	);
+
 }
 
 #define GPIO_BASE		0x10010000
@@ -203,40 +206,47 @@ uint32_t read_soc_id() {
     }
 
     volatile uint32_t *reg = (volatile uint32_t *)(map_base + (CONTROL_REG & (PAGE_SIZE - 1)));
-    uint32_t value = *reg;
+    uint32_t soc_id = *reg;
 
     munmap(map_base, PAGE_SIZE);
     close(fd);
-    return value;
+    return soc_id;
 }
 
 void set_port_width() {
     uint32_t soc_id = read_soc_id();
-    uint32_t soc_type = (soc_id >> 12) & 0xFF; // Extract relevant bits for SOC type
+    uint32_t soc_type;
 
+    // Extracting the relevant bits from soc_id to determine the SOC type
+    if ((soc_id >> 28) != 1) {
+        // For SOC types where upper 4 bits are 1, use bits 12-19
+        soc_type = (soc_id >> 12) & 0xFF;
+    } else {
+        // For other SOC types (like T10/T20), use a different method
+        soc_type = ((soc_id << 4) >>
+            0x10);
+    }
+
+    // Set GPIO_PORT_WIDTH based on soc_type
     switch (soc_type) {
-        case 0x10:
+	    case 5: // Assuming this is for T10
             GPIO_PORT_WIDTH = 0x100;
             break;
-		case 0x15:
+        case 0x2000: // Assuming this is for T20
             GPIO_PORT_WIDTH = 0x100;
             break;
-        case 0x20:
-            GPIO_PORT_WIDTH = 0x100;
-            break;
-		case 0x21:
-            GPIO_PORT_WIDTH = 0x1000;
-            break;
-		 case 0x30:
-            GPIO_PORT_WIDTH = 0x1000;
-            break;
-		 case 0x31:
+        case 0x21:
+        case 0x30:
+        case 0x31:
             GPIO_PORT_WIDTH = 0x1000;
             break;
         default:
-            printf("Unknown SOC\n");
+            GPIO_PORT_WIDTH = 0x100; // Default value
             break;
     }
+    // Debug
+    // printf("SOC ID: 0x%08X\n", soc_id);
+    // printf("SOC Type: 0x%04X\n", soc_type);
 }
 
 static uint8_t drive_strength_to_ma(uint8_t strength) {
