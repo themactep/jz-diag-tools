@@ -26,6 +26,9 @@
 #include <sys/mman.h>
 #include <ctype.h>
 
+#define PxDRVL_OFFSET 0x130
+#define PxDRVH_OFFSET 0x140
+
 static void show_help() {
 	puts(
 		"Usage: jz_gpio <show|[GPIO_DEF [COMMAND VALUE]]>\n"
@@ -42,6 +45,7 @@ static void show_help() {
 		"  read                       Shortcut of `inl'\n"
 		"  write                      Shortcut of `pat0'\n"
 		"  func                       Shortcut of `int 0', `msk 0', `pat1 <1>', `pat0 <0>'\n"
+		"  drive <value>              Set drive strength (0-3 for 2ma, 4ma, 8ma, 12ma)\n"
 		"\n"
 		"Examples:\n"
 		"  jz_gpio show\n"
@@ -189,6 +193,28 @@ static long check_val(const char *val) {
 	return strtol(val, NULL, 10);
 }
 
+static void set_drive_strength(volatile XHAL_GPIO_HandleTypeDef *port, uint8_t offset, uint8_t strength) {
+    if (strength > 3) {
+        printf("Invalid drive strength. Must be 0-3.\n");
+        return;
+    }
+
+    uint32_t *drive_reg;
+    uint32_t mask = 3 << (offset * 2); // Each pin has 2 bits for drive strength
+
+    if (offset < 16) {
+        // For lower pins (0-15)
+        drive_reg = (uint32_t *)((uint8_t *)port + PxDRVL_OFFSET);
+    } else {
+        // For higher pins (16 and above)
+        drive_reg = (uint32_t *)((uint8_t *)port + PxDRVH_OFFSET);
+        offset -= 16;  // Adjust offset for high pins
+    }
+
+    *drive_reg &= ~mask; // Clear existing strength bits
+    *drive_reg |= (strength << (offset * 2)); // Set new strength
+}
+
 int main(int argc, char **argv) {
 	if (argc < 2) {
 		show_help();
@@ -267,6 +293,13 @@ int main(int argc, char **argv) {
 
 				BIT_GET(v, 1) ? BIT_SET(port->PAT1S, offset) : BIT_SET(port->PAT1C, offset);
 				BIT_GET(v, 0) ? BIT_SET(port->PAT0S, offset) : BIT_SET(port->PAT0C, offset);
+			} else if (0 == strcmp(argv[2], "drive")) {
+				if (!argv[3]) {
+					printf("error: drive strength value not specified\n");
+					return 2;
+				}
+				uint8_t drive_strength = (uint8_t)strtol(argv[3], NULL, 10);
+				set_drive_strength(port, offset, drive_strength);
 			} else {
 				printf("error: Bad command `%s'\n", argv[2]);
 			}
