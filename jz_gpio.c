@@ -54,7 +54,7 @@ static void show_help() {
 }
 
 #define GPIO_BASE		0x10010000
-#define GPIO_PORT_WIDTH		0x100
+#define GPIO_PORT_WIDTH		0x1000
 
 #define BIT_GET(x, n)		(((x) >> (n)) & 1)
 #define BIT_SET(x, n)		((x) |= (1 << (n)))
@@ -93,7 +93,7 @@ typedef struct {
 static void *phys_mem = NULL;
 
 static void show_gpios() {
-	for (int i=0; i<7; i++) {
+	for (int i=0; i<3; i++) {
 		volatile XHAL_GPIO_HandleTypeDef *port = phys_mem + i * GPIO_PORT_WIDTH;
 
 		printf("Port %c\n", 'A' + i);
