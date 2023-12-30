@@ -57,16 +57,16 @@ static void show_help() {
 
 }
 
-#define GPIO_BASE		0x10010000
-#define CONTROL_REG     0x1300002C // Control register address
-#define PAGE_SIZE 4096  // Define a constant for the page size
+#define GPIO_BASE	0x10010000
+#define CONTROL_REG	0x1300002C	// Control register address
+#define PAGE_SIZE	4096		// Define a constant for the page size
 
-#define PxDRVL_OFFSET 0x130
-#define PxDRVH_OFFSET 0x140
+#define PxDRVL_OFFSET	0x130
+#define PxDRVH_OFFSET	0x140
 
-#define BIT_GET(x, n)		(((x) >> (n)) & 1)
-#define BIT_SET(x, n)		((x) |= (1 << (n)))
-#define BIT_CLR(x, n)		((x) &= ~(1 << (n)))
+#define BIT_GET(x, n)	(((x) >> (n)) & 1)
+#define BIT_SET(x, n)	((x) |= (1 << (n)))
+#define BIT_CLR(x, n)	((x) &= ~(1 << (n)))
 
 typedef struct {
 	volatile const uint32_t INL;
@@ -112,14 +112,14 @@ static void show_gpios() {
 		printf("================\n");
 
 		for (int j = 0; j < 32; j++) {
-			printf("P%c%02u: ", 'A' + i, j);
+			printf("P%c%02u [%02d]: ", 'A' + i, j, i * 32 + j);
 			uint8_t drive_strength = get_drive_strength(port, j);
 
-			bool b_int = BIT_GET(port->INT, j);
-			bool b_msk = BIT_GET(port->MSK, j);
+			bool b_int  = BIT_GET(port->INT, j);
+			bool b_msk  = BIT_GET(port->MSK, j);
 			bool b_pat1 = BIT_GET(port->PAT1, j);
 			bool b_pat0 = BIT_GET(port->PAT0, j);
-			bool b_inl = BIT_GET(port->INL, j); // Get the input level
+			bool b_inl  = BIT_GET(port->INL, j); // Get the input level
 
 			if (b_int) {
 				if (b_pat1) {
@@ -192,110 +192,109 @@ static long check_val(const char *val) {
 }
 
 uint32_t read_soc_id() {
-    int fd = open("/dev/mem", O_RDONLY);
-    if (fd < 0) {
-        perror("Error opening /dev/mem");
-        return 0;
-    }
+	int fd = open("/dev/mem", O_RDONLY);
+	if (fd < 0) {
+		perror("Error opening /dev/mem");
+		return 0;
+	}
 
-    void *map_base = mmap(NULL, PAGE_SIZE, PROT_READ, MAP_SHARED, fd, CONTROL_REG & ~(PAGE_SIZE - 1));
-    if (map_base == MAP_FAILED) {
-        close(fd);
-        perror("Error mapping memory");
-        return 0;
-    }
+	void *map_base = mmap(NULL, PAGE_SIZE, PROT_READ, MAP_SHARED, fd, CONTROL_REG & ~(PAGE_SIZE - 1));
+	if (map_base == MAP_FAILED) {
+		close(fd);
+		perror("Error mapping memory");
+		return 0;
+	}
 
-    volatile uint32_t *reg = (volatile uint32_t *)(map_base + (CONTROL_REG & (PAGE_SIZE - 1)));
-    uint32_t soc_id = *reg;
+	volatile uint32_t *reg = (volatile uint32_t *)(map_base + (CONTROL_REG & (PAGE_SIZE - 1)));
+	uint32_t soc_id = *reg;
 
-    munmap(map_base, PAGE_SIZE);
-    close(fd);
-    return soc_id;
+	munmap(map_base, PAGE_SIZE);
+	close(fd);
+	return soc_id;
 }
 
 void set_port_width() {
-    uint32_t soc_id = read_soc_id();
-    uint32_t soc_type;
+	uint32_t soc_id = read_soc_id();
+	uint32_t soc_type;
 
-    // Extracting the relevant bits from soc_id to determine the SOC type
-    if ((soc_id >> 28) != 1) {
-        // For SOC types where upper 4 bits are 1, use bits 12-19
-        soc_type = (soc_id >> 12) & 0xFF;
-    } else {
-        // For other SOC types (like T10/T20), use a different method
-        soc_type = ((soc_id << 4) >>
-            0x10);
-    }
+	// Extracting the relevant bits from soc_id to determine the SOC type
+	if ((soc_id >> 28) != 1) {
+		// For SOC types where upper 4 bits are 1, use bits 12-19
+		soc_type = (soc_id >> 12) & 0xFF;
+	} else {
+		// For other SOC types (like T10/T20), use a different method
+		soc_type = ((soc_id << 4) >> 0x10);
+	}
 
-    // Set GPIO_PORT_WIDTH based on soc_type
-    switch (soc_type) {
-	    case 5: // Assuming this is for T10
-            GPIO_PORT_WIDTH = 0x100;
-            break;
-        case 0x2000: // Assuming this is for T20
-            GPIO_PORT_WIDTH = 0x100;
-            break;
-        case 0x21:
-        case 0x30:
-        case 0x31:
-            GPIO_PORT_WIDTH = 0x1000;
-            break;
-        default:
-            GPIO_PORT_WIDTH = 0x100; // Default value
-            break;
-    }
-    printf("SOC ID: 0x%08X\n", soc_id);
-    printf("SOC Type: 0x%04X\n", soc_type);
+	// Set GPIO_PORT_WIDTH based on soc_type
+	switch (soc_type) {
+		case 5: // Assuming this is for T10
+		GPIO_PORT_WIDTH = 0x100;
+		break;
+	case 0x2000: // Assuming this is for T20
+		GPIO_PORT_WIDTH = 0x100;
+		break;
+	case 0x21:
+	case 0x30:
+	case 0x31:
+		GPIO_PORT_WIDTH = 0x1000;
+		break;
+	default:
+		GPIO_PORT_WIDTH = 0x100; // Default value
+		break;
+	}
+	printf("SOC ID: 0x%08X\n", soc_id);
+	printf("SOC Type: 0x%04X\n", soc_type);
 }
 
 static uint8_t drive_strength_to_ma(uint8_t strength) {
-    switch (strength) {
-        case 0: return 2;
-        case 1: return 4;
-        case 2: return 8;
-        case 3: return 12;
-        default: return 0; // Invalid strength
-    }
+	switch (strength) {
+		case 0: return 2;
+		case 1: return 4;
+		case 2: return 8;
+		case 3: return 12;
+		default: return 0; // Invalid strength
+	}
 }
 
 static uint8_t get_drive_strength(volatile XHAL_GPIO_HandleTypeDef *port, uint8_t offset) {
-    uint32_t *drive_reg;
-    uint32_t mask = 3 << (offset * 2); // Each pin has 2 bits for drive strength
-    uint8_t strength;
+	uint32_t *drive_reg;
+	uint32_t mask = 3 << (offset * 2); // Each pin has 2 bits for drive strength
+	uint8_t strength;
 
-    if (offset < 16) {
-        // For lower pins (0-15)
-        drive_reg = (uint32_t *)((uint8_t *)port + PxDRVL_OFFSET);
-    } else {
-        // For higher pins (16 and above)
-        drive_reg = (uint32_t *)((uint8_t *)port + PxDRVH_OFFSET);
-        offset -= 16; // Adjust offset for high pins
-    }
+	if (offset < 16) {
+		// For lower pins (0-15)
+		drive_reg = (uint32_t *)((uint8_t *)port + PxDRVL_OFFSET);
+	} else {
+		// For higher pins (16 and above)
+		drive_reg = (uint32_t *)((uint8_t *)port + PxDRVH_OFFSET);
+		offset -= 16; // Adjust offset for high pins
+	}
 
-    strength = (*drive_reg & mask) >> (offset * 2);
-    return strength;
+	strength = (*drive_reg & mask) >> (offset * 2);
+	return strength;
 }
 
 static void set_drive_strength(volatile XHAL_GPIO_HandleTypeDef *port, uint8_t offset, uint8_t strength) {
-    if (strength > 3) {
-        printf("Invalid drive strength. Must be 0-3.\n");
-        return;
-    }
+	if (strength > 3) {
+		printf("Invalid drive strength. Must be 0-3.\n");
+		return;
+	}
 
-    uint32_t *drive_reg;
-    uint32_t mask = 3 << (offset * 2); // Each pin has 2 bits for drive strength
+	uint32_t *drive_reg;
+	uint32_t mask = 3 << (offset * 2); // Each pin has 2 bits for drive strength
 
-    if (offset < 16) {
-        // For lower pins (0-15)
-        drive_reg = (uint32_t *)((uint8_t *)port + PxDRVL_OFFSET);
-    } else {
-        // For higher pins (16 and above)
-        drive_reg = (uint32_t *)((uint8_t *)port + PxDRVH_OFFSET);
-        offset -= 16;  // Adjust offset for high pins
-    }
+	if (offset < 16) {
+		// For lower pins (0-15)
+		drive_reg = (uint32_t *)((uint8_t *)port + PxDRVL_OFFSET);
+	} else {
+		// For higher pins (16 and above)
+		drive_reg = (uint32_t *)((uint8_t *)port + PxDRVH_OFFSET);
+		offset -= 16;  // Adjust offset for high pins
+	}
 
-    *drive_reg &= ~mask; // Clear existing strength bits
-    *drive_reg |= (strength << (offset * 2)); // Set new strength
+	*drive_reg &= ~mask; // Clear existing strength bits
+	*drive_reg |= (strength << (offset * 2)); // Set new strength
 }
 
 int main(int argc, char **argv) {
