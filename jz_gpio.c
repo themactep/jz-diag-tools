@@ -30,7 +30,7 @@ uint32_t read_soc_id(); // Function prototype for read_soc_id
 
 static void show_help() {
 	puts(
-		"Usage: jz_gpio <show|[GPIO_DEF [COMMAND VALUE]]>\n"
+		"Usage: ingenic-gpio <show|[GPIO_DEF [COMMAND VALUE]]>\n"
 		"GPIO diagnostic tool for Ingenic Tomahawk Series SoCs.\n"
 		"\n"
 		"Commands:\n"
@@ -44,15 +44,15 @@ static void show_help() {
 		"  read                       Shortcut of `inl'\n"
 		"  write                      Shortcut of `pat0'\n"
 		"  func                       Shortcut of `int 0', `msk 0', `pat1 <1>', `pat0 <0>'\n"
-		"  drive <value>              Set drive strength (0-3 for 2ma, 4ma, 8ma, 12ma)\n"
+		"  drive                      Set drive strength (0-3 for 2ma, 4ma, 8ma, 12ma)\n"
 		"\n"
 		"Examples:\n"
-		"  jz_gpio show\n"
-		"  jz_gpio pc23 gpio_input\n"
-		"  jz_gpio pc23 read\n"
-		"  jz_gpio pa00 gpio_output\n"
-		"  jz_gpio pa00 write 1\n"
-		"  jz_gpio pb27 func 0  # Set PB27 as 24MHz clock output on X1000\n"
+		"  ingenic-gpio show\n"
+		"  ingenic-gpio pc23 gpio_input\n"
+		"  ingenic-gpio pc23 read\n"
+		"  ingenic-gpio pa00 gpio_output\n"
+		"  ingenic-gpio pa00 write 1\n"
+		"  ingenic-gpio pb27 func 0  # Set PB27 as 24MHz clock output on X1000\n"
 	);
 
 }
